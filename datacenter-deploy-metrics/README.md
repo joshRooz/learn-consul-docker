@@ -31,3 +31,13 @@ Deploy a Consul datacenter (one server and one client), Grafana container, Prome
 - [https://learn.hashicorp.com/tutorials/consul/monitor-datacenter-health](https://learn.hashicorp.com/tutorials/consul/monitor-datacenter-health)
 - [https://learn.hashicorp.com/tutorials/consul/kubernetes-layer7-observability](https://learn.hashicorp.com/tutorials/consul/kubernetes-layer7-observability)
 - [https://www.consul.io/docs/agent/telemetry](https://www.consul.io/docs/agent/telemetry)
+
+
+## Maintenance: Update the Grafana Dashboard
+Fetch the most recent revision of the Consul Server Monitoring dashboard (ID: 13396). Download and update, appending revision information for easy reference.
+
+```sh
+dashboard="$(curl  https://grafana.com/api/dashboards/13396/revisions | jq -r '.items | max_by(.revision) | { revision, path: .links[] | select(.rel == "download").href }')"
+wget -O "grafana/dashboards/consul-server-monitoring_rev$(echo $dashboard | jq -r .revision).json" "https://grafana.com/api$(echo $dashboard | jq -r .path)"
+sed -i '' -e 's/${DS_PROMETHEUS}/Prometheus/g  ; s/DS_PROMETHEUS/Prometheus/g' "grafana/dashboards/consul-server-monitoring_rev$(echo $dashboard | jq -r .revision).json"
+```

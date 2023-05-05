@@ -4,17 +4,34 @@ services:
   
   consul-server:
     image: hashicorp/consul:1.15.2
-    container_name: consul-server
-    restart: always
-    volumes:
-      - ./server.json:/consul/config/server.json:ro
+    deploy:
+      replicas: 3
+    restart: unless-stopped
     networks:
       - consul
     ports:
-      - "8500:8500"
-      - "8600:8600/tcp"
-      - "8600:8600/udp"
-    command: "agent"
+      # port-fowarding on dynamic ephemeral ports so we can target
+      # individual agents from host machine, if desired, while keeping the
+      # compose services block small by using deploy.replicas. meanwhile,
+      # the nginx service (defined below) exposes standard consul ports
+      # for http and dns using docker's built-in dns server to forward.
+      - 8500/tcp
+      - 8600/tcp
+      - 8600/udp
+    command:
+      - /bin/sh
+      - -ec
+      - >
+        /bin/consul
+        agent
+        -server
+        -data-dir=/consul/data
+        -bootstrap-expect=3
+        -retry-join=consul-server
+        -client=0.0.0.0
+        -ui
+        -node=consul-server-$${HOSTNAME}
+        -hcl='telemetry { prometheus_retention_time = "60s", disable_hostname = true }'
 
   consul-client:
     image: hashicorp/consul:1.15.2
@@ -68,6 +85,21 @@ services:
       - consul
     ports:
       - 9100:9100
+
+  # nginx proxy so we can use docker compose replicas while exposing
+  # http/8500 and dns/8600 through port-forwarding
+  nginx:
+    image: nginx:1.24.0
+    container_name: nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    ports:
+      - 8500:8500/tcp
+      - 8600:8600/udp
+      - 8600:8600/tcp
+    networks:
+      - consul
 
 networks:
   consul:
